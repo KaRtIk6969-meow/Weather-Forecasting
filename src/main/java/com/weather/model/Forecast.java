@@ -92,11 +92,21 @@ public class Forecast {
         return minTemperature;
     }
 
+    /** Alias for getMinTemperature() */
+    public double getMinTemp() {
+        return minTemperature;
+    }
+
     public void setMinTemperature(double minTemperature) {
         this.minTemperature = minTemperature;
     }
 
     public double getMaxTemperature() {
+        return maxTemperature;
+    }
+
+    /** Alias for getMaxTemperature() */
+    public double getMaxTemp() {
         return maxTemperature;
     }
 
