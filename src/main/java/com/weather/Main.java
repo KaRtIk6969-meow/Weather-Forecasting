@@ -18,13 +18,13 @@ public class Main extends Application {
         MainView mainView = new MainView();
 
         // Create the scene with standard desktop window dimensions
-        Scene scene = new Scene(mainView.getView(), 680, 420);
+        Scene scene = new Scene(mainView.getView(), 680, 480);
 
         // Configure and display the primary stage
         primaryStage.setTitle("Weather Forecasting & Visualization System");
         primaryStage.setScene(scene);
-        primaryStage.setMinWidth(500);
-        primaryStage.setMinHeight(350);
+        primaryStage.setMinWidth(550);
+        primaryStage.setMinHeight(420);
         primaryStage.show();
     }
 
