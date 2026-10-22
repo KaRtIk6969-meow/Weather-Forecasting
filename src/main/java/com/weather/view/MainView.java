@@ -3,6 +3,7 @@ package com.weather.view;
 import com.weather.controller.WeatherController;
 import com.weather.model.WeatherData;
 import com.weather.model.WeatherResponse;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
@@ -13,12 +14,15 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 /**
- * MainView is responsible for building the user interface.
+ * MainView is responsible for building and managing the user interface.
  * 
- * In accordance with MVC principles:
- * - It displays input fields and controls for user interaction.
- * - When the user clicks "Search", it invokes the WeatherController.
- * - It displays the returned live weather data or error messages.
+ * Concurrency & Threading Model (JavaFX):
+ * - UI components and event handlers run on the "JavaFX Application Thread".
+ * - Network operations (such as HTTP calls to Open-Meteo) are executed asynchronously
+ *   inside a JavaFX {@link javafx.concurrent.Task} on a background worker thread.
+ * - This prevents the UI from freezing or lagging while waiting for network responses.
+ * - The Task's lifecycle hooks (`setOnSucceeded` and `setOnFailed`) automatically run
+ *   on the JavaFX Application Thread, making it completely thread-safe to update UI labels.
  */
 public class MainView {
 
@@ -56,12 +60,12 @@ public class MainView {
         Label titleLabel = new Label("Weather Forecasting & Visualization System");
         titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #1e293b;");
 
-        Label subtitleLabel = new Label("MVC Architecture • Live Weather API Integration");
+        Label subtitleLabel = new Label("MVC Architecture • Asynchronous Background Tasks • Live API");
         subtitleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748b;");
 
         // 2. City Input & Search Button
         cityInputField = new TextField();
-        cityInputField.setPromptText("Enter city name (e.g. Chandigarh, Delhi, London)...");
+        cityInputField.setPromptText("Enter city name (e.g. Chandigarh, London, Tokyo)...");
         cityInputField.setPrefWidth(320);
         cityInputField.setStyle("-fx-font-size: 13px; -fx-padding: 8px 12px;");
 
@@ -126,55 +130,103 @@ public class MainView {
 
     /**
      * Executes when the user initiates a search.
-     * Communicates with the WeatherController and updates UI labels.
+     * 
+     * Uses JavaFX Task to perform the HTTP network operations on a background thread,
+     * maintaining high UI responsiveness and 60 FPS animation/interaction.
      */
     private void performSearch() {
         String inputCity = cityInputField.getText();
 
-        // 1. Check for empty input
+        // 1. Validate Input (Runs on JavaFX Application Thread)
         if (inputCity == null || inputCity.trim().isEmpty()) {
             statusMessageLabel.setText("⚠️ Please enter a city name before searching.");
             statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #dc2626; -fx-font-weight: bold;");
             return;
         }
 
-        String cityName = inputCity.trim();
+        final String cityName = inputCity.trim();
 
-        // 2. Indicate loading status
-        statusMessageLabel.setText("⏳ Fetching live weather data for \"" + cityName + "\"...");
-        statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #2563eb;");
+        // 2. Provide Immediate UI Feedback & Disable Controls to prevent duplicate requests
+        searchButton.setDisable(true);
+        cityInputField.setDisable(true);
+        statusMessageLabel.setText("⏳ Loading live weather data for \"" + cityName + "\"...");
+        statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #2563eb; -fx-font-weight: bold;");
 
-        // 3. Delegate to WeatherController
-        WeatherResponse response = controller.searchWeather(cityName);
+        // 3. Create a JavaFX Task to execute the network search in the background
+        Task<WeatherResponse> weatherSearchTask = new Task<>() {
+            @Override
+            protected WeatherResponse call() throws Exception {
+                // IMPORTANT: This call() method runs on a BACKGROUND WORKER THREAD!
+                // Never update or touch JavaFX UI controls directly inside this method.
+                return controller.searchWeather(cityName);
+            }
+        };
 
-        // 4. Handle response
-        if (response == null || response.getCurrentWeather() == null) {
-            statusMessageLabel.setText("❌ Could not retrieve weather for \"" + cityName + "\". Please verify the city name or check your internet connection.");
+        // 4. On Task Success (JavaFX automatically calls this on the JavaFX Application Thread!)
+        weatherSearchTask.setOnSucceeded(event -> {
+            // Re-enable input controls
+            searchButton.setDisable(false);
+            cityInputField.setDisable(false);
+
+            WeatherResponse response = weatherSearchTask.getValue();
+
+            if (response == null || response.getCurrentWeather() == null) {
+                // City was not found or API returned an error
+                statusMessageLabel.setText("❌ Could not retrieve weather for \"" + cityName + "\". Please verify the city name or check your internet connection.");
+                statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #dc2626; -fx-font-weight: bold;");
+
+                // Reset labels
+                resetWeatherLabels();
+            } else {
+                // Populate UI with LIVE weather data
+                WeatherData current = response.getCurrentWeather();
+
+                cityNameHeaderLabel.setText("📍 Current Weather in " + current.getCityName());
+                temperatureLabel.setText(String.format("🌡 Temperature: %.1f °C  (Feels like: %.1f °C)",
+                        current.getTemperature(), current.getFeelsLike()));
+                conditionLabel.setText(String.format("☁ Condition: %s — %s",
+                        current.getCondition(), current.getDescription()));
+                humidityLabel.setText(String.format("💧 Humidity: %d %%",
+                        current.getHumidity()));
+                windSpeedLabel.setText(String.format("💨 Wind Speed: %.1f km/h  |  Pressure: %d hPa",
+                        current.getWindSpeed(), current.getPressure()));
+
+                statusMessageLabel.setText("✓ Live weather data successfully retrieved from Open-Meteo API!");
+                statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #059669; -fx-font-weight: bold;");
+            }
+        });
+
+        // 5. On Task Failure (JavaFX automatically calls this on the JavaFX Application Thread!)
+        weatherSearchTask.setOnFailed(event -> {
+            // Re-enable input controls
+            searchButton.setDisable(false);
+            cityInputField.setDisable(false);
+
+            Throwable exception = weatherSearchTask.getException();
+            String errorMessage = (exception != null && exception.getMessage() != null)
+                    ? exception.getMessage() : "Unknown network error";
+
+            statusMessageLabel.setText("❌ Network request failed: " + errorMessage);
             statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #dc2626; -fx-font-weight: bold;");
 
-            // Reset weather labels
-            cityNameHeaderLabel.setText("City: —");
-            temperatureLabel.setText("Temperature: — °C");
-            conditionLabel.setText("Condition: —");
-            humidityLabel.setText("Humidity: — %");
-            windSpeedLabel.setText("Wind Speed: — km/h");
-            return;
-        }
+            resetWeatherLabels();
+        });
 
-        // 5. Populate UI with LIVE weather data
-        WeatherData current = response.getCurrentWeather();
+        // 6. Launch the Task on a dedicated background Thread
+        Thread backgroundThread = new Thread(weatherSearchTask);
+        // Setting daemon to true ensures this thread will not keep the JVM alive if the user closes the app
+        backgroundThread.setDaemon(true);
+        backgroundThread.start();
+    }
 
-        cityNameHeaderLabel.setText("📍 Current Weather in " + current.getCityName());
-        temperatureLabel.setText(String.format("🌡 Temperature: %.1f °C  (Feels like: %.1f °C)",
-                current.getTemperature(), current.getFeelsLike()));
-        conditionLabel.setText(String.format("☁ Condition: %s — %s",
-                current.getCondition(), current.getDescription()));
-        humidityLabel.setText(String.format("💧 Humidity: %d %%",
-                current.getHumidity()));
-        windSpeedLabel.setText(String.format("💨 Wind Speed: %.1f km/h  |  Pressure: %d hPa",
-                current.getWindSpeed(), current.getPressure()));
-
-        statusMessageLabel.setText("✓ Live weather data successfully retrieved from Open-Meteo API!");
-        statusMessageLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #059669; -fx-font-weight: bold;");
+    /**
+     * Resets the weather metric labels to placeholder values.
+     */
+    private void resetWeatherLabels() {
+        cityNameHeaderLabel.setText("City: —");
+        temperatureLabel.setText("Temperature: — °C");
+        conditionLabel.setText("Condition: —");
+        humidityLabel.setText("Humidity: — %");
+        windSpeedLabel.setText("Wind Speed: — km/h");
     }
 }
