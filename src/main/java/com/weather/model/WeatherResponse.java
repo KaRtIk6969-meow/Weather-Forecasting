@@ -22,25 +22,41 @@ public class WeatherResponse {
     /** Multi-day forecast collection (e.g., 7-day outlook) */
     private List<Forecast> forecasts;
 
+    /** Hourly forecast collection (e.g., 24-hour progression) */
+    private List<HourlyForecast> hourlyForecasts;
+
     // 2. Constructors
 
     /**
      * Default no-argument constructor.
-     * Initializes an empty forecast list.
+     * Initializes empty forecast lists.
      */
     public WeatherResponse() {
         this.forecasts = new ArrayList<>();
+        this.hourlyForecasts = new ArrayList<>();
     }
 
     /**
-     * Parameterized constructor.
+     * Parameterized constructor for current weather and daily forecasts.
      *
      * @param currentWeather the current weather object
      * @param forecasts      the list of daily forecast objects
      */
     public WeatherResponse(WeatherData currentWeather, List<Forecast> forecasts) {
+        this(currentWeather, forecasts, new ArrayList<>());
+    }
+
+    /**
+     * Parameterized constructor for current weather, daily forecasts, and hourly forecasts.
+     *
+     * @param currentWeather  the current weather object
+     * @param forecasts       the list of daily forecast objects
+     * @param hourlyForecasts the list of hourly forecast objects
+     */
+    public WeatherResponse(WeatherData currentWeather, List<Forecast> forecasts, List<HourlyForecast> hourlyForecasts) {
         this.currentWeather = currentWeather;
         this.forecasts = forecasts != null ? forecasts : new ArrayList<>();
+        this.hourlyForecasts = hourlyForecasts != null ? hourlyForecasts : new ArrayList<>();
     }
 
     // 3. Getters and Setters
@@ -61,6 +77,14 @@ public class WeatherResponse {
         this.forecasts = forecasts != null ? forecasts : new ArrayList<>();
     }
 
+    public List<HourlyForecast> getHourlyForecasts() {
+        return hourlyForecasts;
+    }
+
+    public void setHourlyForecasts(List<HourlyForecast> hourlyForecasts) {
+        this.hourlyForecasts = hourlyForecasts != null ? hourlyForecasts : new ArrayList<>();
+    }
+
     // 4. toString method
 
     @Override
@@ -68,7 +92,9 @@ public class WeatherResponse {
         return "WeatherResponse{" +
                 "currentWeather=" + currentWeather +
                 ", forecastsCount=" + (forecasts != null ? forecasts.size() : 0) +
+                ", hourlyForecastsCount=" + (hourlyForecasts != null ? hourlyForecasts.size() : 0) +
                 ", forecasts=" + forecasts +
+                ", hourlyForecasts=" + hourlyForecasts +
                 '}';
     }
 }

@@ -2,6 +2,7 @@ package com.weather.service;
 
 import com.weather.model.CityCoordinates;
 import com.weather.model.Forecast;
+import com.weather.model.HourlyForecast;
 import com.weather.model.WeatherData;
 import com.weather.model.WeatherResponse;
 import org.json.JSONArray;
@@ -20,13 +21,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * WeatherApiService handles fetching real meteorological observations and multi-day
- * forecast projections from the Open-Meteo Forecast REST API.
+ * WeatherApiService handles fetching real meteorological observations, multi-day
+ * forecast projections, and hourly outlooks from the Open-Meteo Forecast REST API.
  *
  * Responsibilities:
  * 1. Formulate request URLs using latitude and longitude from CityCoordinates.
  * 2. Execute HTTP GET requests using Java's HttpClient.
- * 3. Parse JSON payloads and transform them into WeatherData and Forecast objects.
+ * 3. Parse JSON payloads and transform them into WeatherData, Forecast, and HourlyForecast objects.
  * 4. Return an aggregated WeatherResponse object.
  */
 public class WeatherApiService {
@@ -47,10 +48,10 @@ public class WeatherApiService {
     }
 
     /**
-     * Fetches current weather and a 7-day forecast for the given geographic coordinates.
+     * Fetches current weather, 7-day forecast, and hourly forecasts for the given geographic coordinates.
      *
      * @param coordinates the CityCoordinates containing latitude, longitude, and city name
-     * @return WeatherResponse containing WeatherData and List<Forecast>, or null on failure
+     * @return WeatherResponse containing WeatherData, List<Forecast>, and List<HourlyForecast>, or null on failure
      */
     public WeatherResponse fetchWeather(CityCoordinates coordinates) {
         if (coordinates == null) {
@@ -63,13 +64,15 @@ public class WeatherApiService {
             // Query parameters requested:
             // - current: temperature_2m, relative_humidity_2m, apparent_temperature, weather_code, surface_pressure, wind_speed_10m
             // - daily: weather_code, temperature_2m_max, temperature_2m_min, relative_humidity_2m_mean, precipitation_probability_max, wind_speed_10m_max
+            // - hourly: temperature_2m, apparent_temperature, weather_code
             // - wind_speed_unit=kmh: ensures wind speed is returned in km/h
             // - timezone=auto: aligns timestamps with the city's local timezone
-            // - forecast_days=7: retrieves approximately 7 days of daily outlook
+            // - forecast_days=7: retrieves approximately 7 days of outlook
             String requestUrl = String.format(Locale.US,
                     "%s?latitude=%.5f&longitude=%.5f" +
                     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,surface_pressure,wind_speed_10m" +
                     "&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,precipitation_probability_max,wind_speed_10m_max" +
+                    "&hourly=temperature_2m,apparent_temperature,weather_code" +
                     "&wind_speed_unit=kmh&timezone=auto&forecast_days=7",
                     FORECAST_API_BASE_URL,
                     coordinates.getLatitude(),
@@ -110,8 +113,12 @@ public class WeatherApiService {
             JSONObject dailyJson = root.getJSONObject("daily");
             List<Forecast> forecasts = parseDailyForecasts(dailyJson);
 
-            // 8. Return aggregated WeatherResponse
-            return new WeatherResponse(currentWeather, forecasts);
+            // 8. Extract Hourly Forecast section
+            JSONObject hourlyJson = root.optJSONObject("hourly");
+            List<HourlyForecast> hourlyForecasts = parseHourlyForecasts(hourlyJson);
+
+            // 9. Return aggregated WeatherResponse
+            return new WeatherResponse(currentWeather, forecasts, hourlyForecasts);
 
         } catch (IOException e) {
             System.err.println("Network Error: Could not connect to Open-Meteo Weather API (" + e.getMessage() + ")");
@@ -232,12 +239,54 @@ public class WeatherApiService {
     }
 
     /**
+     * Parses parallel arrays from the 'hourly' JSON object into a List of HourlyForecast models safely.
+     */
+    private List<HourlyForecast> parseHourlyForecasts(JSONObject hourlyJson) {
+        List<HourlyForecast> hourlyList = new ArrayList<>();
+        if (hourlyJson == null) {
+            return hourlyList;
+        }
+
+        JSONArray timeArray = hourlyJson.optJSONArray("time");
+        if (timeArray == null) {
+            return hourlyList;
+        }
+
+        JSONArray tempArray = hourlyJson.optJSONArray("temperature_2m");
+        JSONArray appTempArray = hourlyJson.optJSONArray("apparent_temperature");
+        JSONArray weatherCodeArray = hourlyJson.optJSONArray("weather_code");
+
+        int count = timeArray.length();
+
+        for (int i = 0; i < count; i++) {
+            LocalDateTime time;
+            try {
+                String timeStr = timeArray.getString(i);
+                time = LocalDateTime.parse(timeStr);
+            } catch (Exception e) {
+                time = LocalDateTime.now().plusHours(i);
+            }
+
+            double temp = (tempArray != null && i < tempArray.length())
+                    ? tempArray.optDouble(i, 0.0) : 0.0;
+            double appTemp = (appTempArray != null && i < appTempArray.length())
+                    ? appTempArray.optDouble(i, temp) : temp;
+            int weatherCode = (weatherCodeArray != null && i < weatherCodeArray.length())
+                    ? weatherCodeArray.optInt(i, 0) : 0;
+
+            hourlyList.add(new HourlyForecast(time, temp, appTemp, weatherCode));
+        }
+
+        return hourlyList;
+    }
+
+    /**
      * Maps WMO (World Meteorological Organization) weather codes to human-readable condition categories.
      *
      * @param code WMO numeric weather code
      * @return high-level condition name (e.g., "Clear", "Rain", "Thunderstorm")
      */
-    private String mapWeatherCondition(int code) {
+    public static String mapWeatherCondition(int code) {
         if (code == 0) {
             return "Clear";
         } else if (code >= 1 && code <= 3) {
@@ -265,7 +314,7 @@ public class WeatherApiService {
      * @param code WMO numeric weather code
      * @return detailed description string
      */
-    private String mapWeatherDescription(int code) {
+    public static String mapWeatherDescription(int code) {
         switch (code) {
             case 0:  return "Clear sky";
             case 1:  return "Mainly clear";
@@ -303,6 +352,7 @@ public class WeatherApiService {
      * 2. Calls WeatherApiService.fetchWeather.
      * 3. Prints the live Current Weather.
      * 4. Prints all 7 daily Forecast objects.
+     * 5. Prints sample Hourly Forecast objects.
      */
     public static void demonstrateWeatherApi() {
         System.out.println("=== Open-Meteo Weather API Service Demonstration ===");
@@ -348,6 +398,19 @@ public class WeatherApiService {
                         forecast.getPrecipitationProbability(),
                         forecast.getCondition(),
                         forecast.getDescription()
+                );
+            }
+
+            System.out.println("\n✓ LIVE Hourly Forecast Received (" + response.getHourlyForecasts().size() + " total entries):");
+            int hourlyCount = Math.min(6, response.getHourlyForecasts().size());
+            for (int i = 0; i < hourlyCount; i++) {
+                HourlyForecast hf = response.getHourlyForecasts().get(i);
+                System.out.printf("  Hour [%s]: Temp %.1f °C | Feels %.1f °C | Code %d (%s)%n",
+                        hf.getTime(),
+                        hf.getTemperature(),
+                        hf.getApparentTemperature(),
+                        hf.getWeatherCode(),
+                        mapWeatherCondition(hf.getWeatherCode())
                 );
             }
         } else {
