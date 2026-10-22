@@ -226,8 +226,8 @@ public class MainView {
      */
     private VBox createCurrentWeatherCard() {
         // City Title & Observation Timestamp
-        cityNameHeaderLabel = new Label("Current Weather: —");
-        cityNameHeaderLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0f172a;");
+        cityNameHeaderLabel = new Label("CURRENT WEATHER: —");
+        cityNameHeaderLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #2563eb; -fx-letter-spacing: 0.5px;");
 
         observationTimeLabel = new Label("Awaiting city search...");
         observationTimeLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748b;");
@@ -236,27 +236,30 @@ public class MainView {
 
         // Primary Temperature & Feels-like
         temperatureValueLabel = new Label("— °C");
-        temperatureValueLabel.setStyle("-fx-font-size: 38px; -fx-font-weight: bold; -fx-text-fill: #1e293b;");
+        temperatureValueLabel.setStyle("-fx-font-size: 44px; -fx-font-weight: bold; -fx-text-fill: #0f172a;");
 
         feelsLikeLabel = new Label("Feels like: — °C");
-        feelsLikeLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #64748b;");
+        feelsLikeLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #64748b; -fx-font-weight: bold;");
 
-        VBox tempBlock = new VBox(2, temperatureValueLabel, feelsLikeLabel);
+        VBox tempBlock = new VBox(1, temperatureValueLabel, feelsLikeLabel);
+        tempBlock.setAlignment(Pos.CENTER_LEFT);
 
         // Condition & Emoji
         conditionEmojiLabel = new Label("🌤️");
-        conditionEmojiLabel.setStyle("-fx-font-size: 42px;");
+        conditionEmojiLabel.setStyle("-fx-font-size: 46px;");
 
         conditionTextLabel = new Label("Condition: —");
-        conditionTextLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #334155;");
+        conditionTextLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #1e293b;");
 
         descriptionLabel = new Label("Description: —");
-        descriptionLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748b;");
+        descriptionLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #64748b;");
 
         VBox conditionBlock = new VBox(2, conditionTextLabel, descriptionLabel);
+        conditionBlock.setAlignment(Pos.CENTER_LEFT);
 
-        HBox weatherHero = new HBox(16, tempBlock, conditionEmojiLabel, conditionBlock);
+        HBox weatherHero = new HBox(22, tempBlock, conditionEmojiLabel, conditionBlock);
         weatherHero.setAlignment(Pos.CENTER_LEFT);
+        weatherHero.setPadding(new Insets(4, 0, 8, 0));
 
         // Metric Tiles Row: Humidity, Wind Speed, Pressure
         humidityTileLabel = new Label("💧 Humidity\n— %");
@@ -339,7 +342,7 @@ public class MainView {
      */
     private VBox createHourlyTemperatureChart() {
         CategoryAxis xAxis = new CategoryAxis();
-        xAxis.setLabel("Time");
+        xAxis.setLabel("Hour");
 
         NumberAxis yAxis = new NumberAxis();
         yAxis.setLabel("Temperature (°C)");
@@ -512,7 +515,7 @@ public class MainView {
             } else {
                 // Populate Current Weather
                 WeatherData current = response.getCurrentWeather();
-                cityNameHeaderLabel.setText("📍 Current Weather in " + current.getCityName());
+                cityNameHeaderLabel.setText("CURRENT WEATHER IN " + current.getCityName().toUpperCase(Locale.ENGLISH));
                 observationTimeLabel.setText("Observed: " + (current.getTimestamp() != null ? current.getTimestamp() : "Just now"));
 
                 temperatureValueLabel.setText(String.format(Locale.US, "%.1f °C", current.getTemperature()));
@@ -952,7 +955,7 @@ public class MainView {
      * Resets current weather labels back to default placeholder values.
      */
     private void resetCurrentWeatherLabels() {
-        cityNameHeaderLabel.setText("Current Weather: —");
+        cityNameHeaderLabel.setText("CURRENT WEATHER: —");
         observationTimeLabel.setText("No active weather data");
         temperatureValueLabel.setText("— °C");
         feelsLikeLabel.setText("Feels like: — °C");
