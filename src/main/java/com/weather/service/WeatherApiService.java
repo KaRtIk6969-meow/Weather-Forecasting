@@ -127,23 +127,24 @@ public class WeatherApiService {
     }
 
     /**
-     * Parses the 'current' JSON object into a WeatherData model.
+     * Parses the 'current' JSON object into a WeatherData model using safe defaults.
      */
     private WeatherData parseCurrentWeather(String cityName, JSONObject currentJson) {
-        double temperature = currentJson.getDouble("temperature_2m");
-        double feelsLike = currentJson.getDouble("apparent_temperature");
-        int humidity = currentJson.getInt("relative_humidity_2m");
-        double windSpeed = currentJson.getDouble("wind_speed_10m");
-        int pressure = (int) Math.round(currentJson.getDouble("surface_pressure"));
-        int weatherCode = currentJson.getInt("weather_code");
+        double temperature = currentJson.optDouble("temperature_2m", 0.0);
+        double feelsLike = currentJson.optDouble("apparent_temperature", temperature);
+        int humidity = currentJson.optInt("relative_humidity_2m", 0);
+        double windSpeed = currentJson.optDouble("wind_speed_10m", 0.0);
+        int pressure = (int) Math.round(currentJson.optDouble("surface_pressure", 1013.0));
+        int weatherCode = currentJson.optInt("weather_code", 0);
 
         String condition = mapWeatherCondition(weatherCode);
         String description = mapWeatherDescription(weatherCode);
 
-        // Parse observation timestamp (e.g., "2026-10-22T09:30") or default to now
+        // Parse observation timestamp safely
         LocalDateTime timestamp;
         try {
-            timestamp = LocalDateTime.parse(currentJson.getString("time"));
+            String timeStr = currentJson.optString("time", "");
+            timestamp = !timeStr.isEmpty() ? LocalDateTime.parse(timeStr) : LocalDateTime.now();
         } catch (Exception e) {
             timestamp = LocalDateTime.now();
         }
@@ -162,35 +163,52 @@ public class WeatherApiService {
     }
 
     /**
-     * Parses parallel arrays from the 'daily' JSON object into a List of Forecast models.
+     * Parses parallel arrays from the 'daily' JSON object into a List of Forecast models safely.
      */
     private List<Forecast> parseDailyForecasts(JSONObject dailyJson) {
         List<Forecast> forecastList = new ArrayList<>();
 
-        JSONArray timeArray = dailyJson.getJSONArray("time");
-        JSONArray maxTempArray = dailyJson.getJSONArray("temperature_2m_max");
-        JSONArray minTempArray = dailyJson.getJSONArray("temperature_2m_min");
+        JSONArray timeArray = dailyJson.optJSONArray("time");
+        if (timeArray == null) {
+            return forecastList;
+        }
+
+        JSONArray maxTempArray = dailyJson.optJSONArray("temperature_2m_max");
+        JSONArray minTempArray = dailyJson.optJSONArray("temperature_2m_min");
         JSONArray humidityArray = dailyJson.optJSONArray("relative_humidity_2m_mean");
-        JSONArray precipProbArray = dailyJson.getJSONArray("precipitation_probability_max");
-        JSONArray windSpeedArray = dailyJson.getJSONArray("wind_speed_10m_max");
-        JSONArray weatherCodeArray = dailyJson.getJSONArray("weather_code");
+        JSONArray precipProbArray = dailyJson.optJSONArray("precipitation_probability_max");
+        JSONArray windSpeedArray = dailyJson.optJSONArray("wind_speed_10m_max");
+        JSONArray weatherCodeArray = dailyJson.optJSONArray("weather_code");
 
         int daysCount = timeArray.length();
 
         for (int i = 0; i < daysCount; i++) {
-            LocalDate date = LocalDate.parse(timeArray.getString(i));
-            double maxTemp = maxTempArray.getDouble(i);
-            double minTemp = minTempArray.getDouble(i);
+            LocalDate date;
+            try {
+                date = LocalDate.parse(timeArray.getString(i));
+            } catch (Exception e) {
+                date = LocalDate.now().plusDays(i);
+            }
+
+            double maxTemp = (maxTempArray != null && i < maxTempArray.length())
+                    ? maxTempArray.optDouble(i, 0.0) : 0.0;
+            double minTemp = (minTempArray != null && i < minTempArray.length())
+                    ? minTempArray.optDouble(i, 0.0) : 0.0;
 
             // Compute average temperature rounded to 1 decimal place
             double avgTemp = Math.round(((maxTemp + minTemp) / 2.0) * 10.0) / 10.0;
 
             int humidity = (humidityArray != null && i < humidityArray.length())
-                    ? humidityArray.getInt(i) : 50;
+                    ? humidityArray.optInt(i, 50) : 50;
 
-            double windSpeed = windSpeedArray.getDouble(i);
-            int precipProb = precipProbArray.getInt(i);
-            int weatherCode = weatherCodeArray.getInt(i);
+            double windSpeed = (windSpeedArray != null && i < windSpeedArray.length())
+                    ? windSpeedArray.optDouble(i, 0.0) : 0.0;
+
+            int precipProb = (precipProbArray != null && i < precipProbArray.length())
+                    ? precipProbArray.optInt(i, 0) : 0;
+
+            int weatherCode = (weatherCodeArray != null && i < weatherCodeArray.length())
+                    ? weatherCodeArray.optInt(i, 0) : 0;
 
             String condition = mapWeatherCondition(weatherCode);
             String description = mapWeatherDescription(weatherCode);

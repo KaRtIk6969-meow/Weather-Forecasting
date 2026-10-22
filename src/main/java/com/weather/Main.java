@@ -18,12 +18,12 @@ public class Main extends Application {
         MainView mainView = new MainView();
 
         // Create the scene with spacious dimensions to accommodate current weather, cards, and charts
-        Scene scene = new Scene(mainView.getView(), 880, 720);
+        Scene scene = new Scene(mainView.getView(), 900, 750);
 
         // Configure and display the primary stage
         primaryStage.setTitle("Weather Forecasting & Visualization System");
         primaryStage.setScene(scene);
-        primaryStage.setMinWidth(740);
+        primaryStage.setMinWidth(760);
         primaryStage.setMinHeight(600);
         primaryStage.show();
     }

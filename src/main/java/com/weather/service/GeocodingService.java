@@ -95,12 +95,17 @@ public class GeocodingService {
                 return null;
             }
 
-            // 8. Extract the first (most relevant) result
+            // 8. Extract the first (most relevant) result safely
             JSONObject firstMatch = results.getJSONObject(0);
-            String resolvedCity = firstMatch.getString("name");
+            String resolvedCity = firstMatch.optString("name", cityName);
             String country = firstMatch.optString("country", "Unknown");
-            double latitude = firstMatch.getDouble("latitude");
-            double longitude = firstMatch.getDouble("longitude");
+            double latitude = firstMatch.optDouble("latitude", Double.NaN);
+            double longitude = firstMatch.optDouble("longitude", Double.NaN);
+
+            if (Double.isNaN(latitude) || Double.isNaN(longitude)) {
+                System.err.println("Geocoding Error: Invalid or missing coordinates received for " + cityName);
+                return null;
+            }
 
             // 9. Return the populated CityCoordinates model
             return new CityCoordinates(resolvedCity, country, latitude, longitude);
